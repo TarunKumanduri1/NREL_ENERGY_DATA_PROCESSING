@@ -138,7 +138,7 @@ la_2 <- la %>%
  string_la <- paste(la_2$location, collapse = ",")  
  
  # Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
- api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+ api_key <- "api_key" 
  wktla <- paste0("MULTIPOINT(", string_la, ")")
  names <- "2019,2020"
  attributes <- "windspeed_100m"
@@ -177,7 +177,7 @@ cl_0_2 <- cl_0 %>%
  string_cl_0 <- paste(cl_0_2$location, collapse = ",")  
  
  # Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
- api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4" 
+ api_key <- "api_key" 
  wktcl <- paste0("POINT(", string_cl_0, ")")
  names <- "2019,2020"
  attributes <- "windspeed_100m"
@@ -211,7 +211,7 @@ library(httr)
 library(here)
 
 process_wind_clusters <- function(cluster_numbers) {
-  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  api_key <- "api_key"
   attributes <- "windspeed_100m"
   names <- "2019,2020"
   utc <- "true"
@@ -271,7 +271,7 @@ library(httr)
 library(here)
 
 process_solar_clusters <- function(cluster_numbers) {
-  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  api_key <- "api_key"
   attributes_rad <- "ghi"
   names <- "2019,2020"
   utc <- "true"
@@ -330,7 +330,7 @@ library(httr)
 library(here)
 
 process_solar_clusters <- function(cluster_numbers) {
-  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  api_key <- "api_key"
   attributes_rad <- "ghi"
   names <- "2019,2020"
   utc <- "true"
@@ -430,7 +430,7 @@ print(name)
 #Use the NREL api to obtain the wind speed at 100m for all plant locations
 
 # Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
-api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+api_key <- "api_key" 
 wkt1 <- paste0("MULTIPOINT(", string_1, ")")
 names <- "2019,2020"
 attributes <- "windspeed_100m"
@@ -528,7 +528,7 @@ read_csv(here('data','wind_1','758667_32.69_-114.49_2019.csv'))
 #use the NREL api to obtain the solar air temperature data for all plant locations -- ignore for now
 
 # Define the new parameters for the GET request - all the same as wind, but the attributes
-#api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+#api_key <- "api_key" 
 #wkt1 <- paste0("MULTIPOINT(", string_1, ")")
 #names <- "2019,2020"
 attributes_temp <- "air_temperature"
