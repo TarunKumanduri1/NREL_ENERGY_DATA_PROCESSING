@@ -49,21 +49,25 @@ Finds the closest data points for each plant.
 
 
 📊 Results & Usage
+
 The final outputs can be used for:
 Analyzing meteorological conditions at power plant sites.
 Identifying extreme weather conditions impacting power generation.
 Comparing clusters across locations to study solar and wind variability.
 
 🛰️ Data Sources
+
 NREL Wind Toolkit API (https://developer.nrel.gov/)
 EPA eGRID Database (https://www.epa.gov/egrid)
 
 📌 Notes
+
 The clustering script ensures plants from the same county do not end up in the same cluster.
 Ensure API keys are correctly configured before running data requests.
 The cleaning scripts remove extreme values for accurate analysis.
 
 📞 Contact
+
 For queries, contact: tarun.kumanduri99@gmail.com
 
 
