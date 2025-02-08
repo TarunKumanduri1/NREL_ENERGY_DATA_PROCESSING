@@ -564,7 +564,7 @@ airtemp_1 <- read_csv(here('data','airtemp_1','268557_36.01_-114.74_2019.csv'))
 #use the NREL api to obtain the solar ghi data for all plant locations
 
 # Define the new parameters for the GET request - all the same as wind, but the attributes
-#api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+#api_key <- "api_key" 
 #wkt1 <- paste0("MULTIPOINT(", string_1, ")")
 #names <- "2019,2020"
 attributes_rad <- "ghi"
