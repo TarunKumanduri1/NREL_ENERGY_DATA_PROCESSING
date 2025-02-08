@@ -99,7 +99,7 @@ df_LA_Location <- df_LA %>%
 string_1 <- paste(df_LA_Location$location, collapse = ",")
 name <- paste0("multipoint(", string_1, ")")
 
-api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+api_key <- "api_key" 
 wkt1 <- paste0("MULTIPOINT(", string_1, ")")
 names <- "2019,2020"
 attributes <- "windspeed_100m"
