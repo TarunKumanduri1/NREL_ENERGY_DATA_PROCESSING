@@ -67,7 +67,7 @@ plants_clean <- plants_fix %>%
 
 gen_loc <- gen_clean %>% 
   inner_join(plants_clean, by = 'ORISPL')
-write_csv(gen_loc, "C:\\Users\\Tarun Kumanduri\\Box\\R\\Paper1\\data\\gen_loc.csv")
+write_csv(gen_loc, "filepath\\Users\\filepath\\Box\\R\\filepath\\data\\gen_loc.csv")
 ```
 
 ```{r}
@@ -82,7 +82,7 @@ print(egrid_fix$ORISPL[3071]) #should be 59036
 df <- egrid %>% 
   select(ORISPL, PNAME, OPRNAME, CNTYNAME, LAT, LON)
 
-write_csv(df, "C:\\Users\\Tarun Kumanduri\\Box\\R\\Paper1\\data\\Coordinates.csv")
+write_csv(df, "filepath\\Users\\filepath\\Box\\R\\filepath\\data\\Coordinates.csv")
 ```
 
 ```{r}
@@ -106,7 +106,7 @@ attributes <- "windspeed_100m"
 utc <- "true"
 leap_day <- "true"
 interval <- "60"
-email <- "abbey.kollar@gwu.edu"
+email <- "email"
 
 # Construct the URL
 url1 <- paste0(
@@ -145,7 +145,7 @@ la_2 <- la %>%
  utc <- "true"
  leap_day <- "true"
  interval <- "60"
- email <- "abbey.kollar@gwu.edu"
+ email <- " "
  
  # Construct the URL
  urlla <- paste0(
@@ -437,7 +437,7 @@ attributes <- "windspeed_100m"
 utc <- "true"
 leap_day <- "true"
 interval <- "60"
-email <- "abbey.kollar@gwu.edu"
+email <- "email"
 
 # Construct the URL
 url1 <- paste0(
@@ -470,7 +470,7 @@ status_code(wind_1)
 
 ```{r}
 #upload all wind files within one folder
-folder_path <- "C:\\Users\\abbey\\Box\\AK Research\\Data\\R\\Paper1\\data\\wind_1_long_test"
+folder_path <- "filepath\\Users\\abbey\\Box\\AK Research\\Data\\R\\filepath\\data\\wind_1_long_test"
 csv_files <- list.files(path = folder_path, pattern = '*.csv', full.names = TRUE)
 # Function to process each CSV file
 process_csv <- function(file_path) {
@@ -511,7 +511,7 @@ cat("Files failed:", sum(!results), "\n")
 
 ```{r}
 
-df <- read_csv("C:\\Users\\abbey\\Box\\AK Research\\Data\\R\\Paper1\\data\\wind_1_long\\809419_34.17_-114.28_2020.csv")
+df <- read_csv("filepath\\Users\\abbey\\Box\\AK Research\\Data\\R\\filepath\\data\\wind_1_long\\809419_34.17_-114.28_2020.csv")
 
 ```
 
@@ -535,7 +535,7 @@ attributes_temp <- "air_temperature"
 #utc <- "true"
 #leap_day <- "true"
 #interval <- "60"
-#email <- "abbey.kollar@gwu.edu"
+#email <- "email"
 
 # Construct the URL
 url1_temp <- paste0(
@@ -571,7 +571,7 @@ attributes_rad <- "ghi"
 #utc <- "true"
 #leap_day <- "true"
 #interval <- "60"
-#email <- "abbey.kollar@gwu.edu"
+#email <- "email"
 
 # Construct the URL
 url1_rad <- paste0(
