@@ -177,146 +177,145 @@ write_csv(df, file.path(here(), "data", "clustered_files", "no_of_plants_cluster
 
 
 
-# #Other codes
-# 
-# # Single cluster Matching
-# 
-# Read CSV files
-# df1 <- read_csv(here::here('data\\clustered_files', 'plants_clusters.csv'))
-# df2 <- read_csv(here('data\\no_of_hours_clusters\\Individual requests\\cluster_98.csv'))
-# # Rename columns in df2
-# colnames(df2)[colnames(df2) == "Latitude"] <- "LAT"
-# colnames(df2)[colnames(df2) == "Longitude"] <- "LON"
-# # Function to find the closest point within a threshold
-# find_closest <- function(lat, lon, df, threshold) {
-#   df$diff <- abs(df$LAT - lat) + abs(df$LON - lon)
-#   closest <- df[which.min(df$diff), ]
-#   if (closest$diff <= threshold) {
-#     return(closest[, c("LAT", "LON", "Hours")])
-#   } else {
-#     return(data.frame(LAT = NA, LON = NA))
-#   }
-# }
-# # Perform initial join with small threshold
-# small_threshold <- 0.1  # Adjust as needed
-# joined <- df1 %>%
-#   rowwise() %>%
-#   mutate(closest = list(find_closest(LAT, LON, df2, small_threshold))) %>%
-#   unnest(cols = c(closest), names_sep = "_df2_")
-# # Rename columns for clarity
+ 
+# Single cluster Matching
+
+Read CSV files
+df1 <- read_csv(here::here('data\\clustered_files', 'plants_clusters.csv'))
+df2 <- read_csv(here('data\\no_of_hours_clusters\\Individual requests\\cluster_98.csv'))
+# Rename columns in df2
+colnames(df2)[colnames(df2) == "Latitude"] <- "LAT"
+colnames(df2)[colnames(df2) == "Longitude"] <- "LON"
+# Function to find the closest point within a threshold
+find_closest <- function(lat, lon, df, threshold) {
+  df$diff <- abs(df$LAT - lat) + abs(df$LON - lon)
+  closest <- df[which.min(df$diff), ]
+  if (closest$diff <= threshold) {
+    return(closest[, c("LAT", "LON", "Hours")])
+  } else {
+    return(data.frame(LAT = NA, LON = NA))
+  }
+}
+# Perform initial join with small threshold
+small_threshold <- 0.1  # Adjust as needed
+joined <- df1 %>%
+  rowwise() %>%
+  mutate(closest = list(find_closest(LAT, LON, df2, small_threshold))) %>%
+  unnest(cols = c(closest), names_sep = "_df2_")
+# Rename columns for clarity
+joined <- joined %>%
+  rename(
+    LAT_point = LAT,
+    LON_point = LON,
+    LAT_NREL = closest_df2_LAT,
+    LON_NREL = closest_df2_LON,
+    Hours = closest_df2_Hours
+  )
+# Determine which cluster has more non-NA values for both LAT_NREL and LON_NREL
+cluster_counts <- joined %>%
+  group_by(cluster) %>%
+  summarise(non_na_count = sum(!is.na(LAT_NREL) & !is.na(LON_NREL)))
+best_cluster <- cluster_counts %>%
+  filter(non_na_count == max(non_na_count)) %>%
+  pull(cluster)
+# Filter the joined dataframe for the best cluster
+filtered_joined <- joined %>%
+  filter(cluster == best_cluster)
+# Create directory for output
+dir.create(file.path(here(), "data", "Joined_data_plants_nrel"), recursive = TRUE)
+# Save the filtered result with appropriate filename
+write_csv(filtered_joined, file.path(here(), "data", "Joined_data_plants_nrel", paste0("cluster_", best_cluster, ".csv")))
+# Print the first few rows of the result
+print(head(filtered_joined))
+# Print summary of join operation
+cat("Number of rows in df1:", nrow(df1), "\n")
+cat("Number of rows in df2:", nrow(df2), "\n")
+cat("Number of rows in joined dataframe:", nrow(joined), "\n")
+cat("Number of rows in filtered joined dataframe:", nrow(filtered_joined), "\n")
+cat("Best cluster:", best_cluster, "\n")
+cat("Number of non-NA matches (both LAT_NREL and LON_NREL) in best cluster:",
+    cluster_counts$non_na_count[cluster_counts$cluster == best_cluster], "\n")
+
+
+
+
+
+
+
+Install and load required packages
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+library(dplyr)
+Read your dataframes
+df1 <- read_csv(here::here('data\\clustered_files', 'cluster_0.csv'))
+colnames(df1)[colnames(df1) == "LAT"] <- "Latitude" 
+colnames(df1)[colnames(df1) == "LON"] <- "Longitude" 
+df2 <- read_csv(here('data\\no_of_hours_clusters\\cluster_0\\wind_speed_summary_cluster_0.csv'))
+# Function to add rounded coordinates to a dataframe
+add_rounded_coords <- function(df, digits = 1) {
+  df$Latitude_rounded <- floor(df$Latitude, digits)
+  df$Longitude_rounded <- floor(df$Longitude, digits)
+  return(df)
+}
+# Add rounded coordinates to both dataframes
+df1 <- add_rounded_coords(df1)
+df2 <- add_rounded_coords(df2)
+# Join based on rounded coordinates
+#joined <- inner_join(df1, df2, by = c("Latitude_rounded", "Longitude_rounded"),
+#                     suffix = c("_df1", "_df2"))
+# If you want to keep all rows from df1, even unmatched ones, use left_join instead:
+joined <- left_join(df1, df2, by = c("Latitude_rounded", "Longitude_rounded"),
+                     suffix = c("_df1", "_df2"))
+# Remove temporary rounded columns
 # joined <- joined %>%
-#   rename(
-#     LAT_point = LAT,
-#     LON_point = LON,
-#     LAT_NREL = closest_df2_LAT,
-#     LON_NREL = closest_df2_LON,
-#     Hours = closest_df2_Hours
-#   )
-# # Determine which cluster has more non-NA values for both LAT_NREL and LON_NREL
-# cluster_counts <- joined %>%
-#   group_by(cluster) %>%
-#   summarise(non_na_count = sum(!is.na(LAT_NREL) & !is.na(LON_NREL)))
-# best_cluster <- cluster_counts %>%
-#   filter(non_na_count == max(non_na_count)) %>%
-#   pull(cluster)
-# # Filter the joined dataframe for the best cluster
-# filtered_joined <- joined %>%
-#   filter(cluster == best_cluster)
-# # Create directory for output
-# dir.create(file.path(here(), "data", "Joined_data_plants_nrel"), recursive = TRUE)
-# # Save the filtered result with appropriate filename
-# write_csv(filtered_joined, file.path(here(), "data", "Joined_data_plants_nrel", paste0("cluster_", best_cluster, ".csv")))
-# # Print the first few rows of the result
-# print(head(filtered_joined))
-# # Print summary of join operation
-# cat("Number of rows in df1:", nrow(df1), "\n")
-# cat("Number of rows in df2:", nrow(df2), "\n")
-# cat("Number of rows in joined dataframe:", nrow(joined), "\n")
-# cat("Number of rows in filtered joined dataframe:", nrow(filtered_joined), "\n")
-# cat("Best cluster:", best_cluster, "\n")
-# cat("Number of non-NA matches (both LAT_NREL and LON_NREL) in best cluster:",
-#     cluster_counts$non_na_count[cluster_counts$cluster == best_cluster], "\n")
-# 
-# 
-# 
+#   select(-Latitude_rounded, -Longitude_rounded)
+# Rename columns to clarify which dataframe they came from
+joined <- joined %>%
+  rename(
+    Latitude_plant = Latitude,
+    Longitude_plant = Longitude,
+    Latitude_NREL = Latitude_df2,
+    Longitude_NREL = Longitude_df2
+  )
+# Save the result
+write.csv(joined, 'joined_output.csv', row.names = FALSE)
+# Print the first few rows of the result
+print(head(joined))
+# Print summary of join operation
+cat("Number of rows in df1:", nrow(df1), "\n")
+cat("Number of rows in df2:", nrow(df2), "\n")
+cat("Number of rows in joined dataframe:", nrow(joined), "\n")
 
+Sample file cleaning
+library(tidyverse)
+library(here)
 
+folder_path <- file.path(here(), "data", "wind_long_clean_cluster", "cluster_0", "249536_37.75_-122.47_2019.csv")
+folder_path_2 <- file.path(here(), "data", "wind_long_clean_cluster", "cluster_0", "249536_37.75_-122.47_2020.csv")
 
+df <- read_csv(folder_path)
+df_2 <- read_csv(folder_path_2)
 
-# Install and load required packages
-#if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
-#library(dplyr)
-# Read your dataframes
-# df1 <- read_csv(here::here('data\\clustered_files', 'cluster_0.csv'))
-# colnames(df1)[colnames(df1) == "LAT"] <- "Latitude" 
-# colnames(df1)[colnames(df1) == "LON"] <- "Longitude" 
-# df2 <- read_csv(here('data\\no_of_hours_clusters\\cluster_0\\wind_speed_summary_cluster_0.csv'))
-# # Function to add rounded coordinates to a dataframe
-# add_rounded_coords <- function(df, digits = 1) {
-#   df$Latitude_rounded <- floor(df$Latitude, digits)
-#   df$Longitude_rounded <- floor(df$Longitude, digits)
-#   return(df)
-# }
-# # Add rounded coordinates to both dataframes
-# df1 <- add_rounded_coords(df1)
-# df2 <- add_rounded_coords(df2)
-# # Join based on rounded coordinates
-# #joined <- inner_join(df1, df2, by = c("Latitude_rounded", "Longitude_rounded"),
-# #                     suffix = c("_df1", "_df2"))
-# # If you want to keep all rows from df1, even unmatched ones, use left_join instead:
-# joined <- left_join(df1, df2, by = c("Latitude_rounded", "Longitude_rounded"),
-#                      suffix = c("_df1", "_df2"))
-# # Remove temporary rounded columns
-# # joined <- joined %>%
-# #   select(-Latitude_rounded, -Longitude_rounded)
-# # Rename columns to clarify which dataframe they came from
-# joined <- joined %>%
-#   rename(
-#     Latitude_plant = Latitude,
-#     Longitude_plant = Longitude,
-#     Latitude_NREL = Latitude_df2,
-#     Longitude_NREL = Longitude_df2
-#   )
-# # Save the result
-# write.csv(joined, 'joined_output.csv', row.names = FALSE)
-# # Print the first few rows of the result
-# print(head(joined))
-# # Print summary of join operation
-# cat("Number of rows in df1:", nrow(df1), "\n")
-# cat("Number of rows in df2:", nrow(df2), "\n")
-# cat("Number of rows in joined dataframe:", nrow(joined), "\n")
+df <- rbind(df, df_2)
 
-#Sample file cleaning
-# library(tidyverse)
-# library(here)
-# 
-# folder_path <- file.path(here(), "data", "wind_long_clean_cluster", "cluster_0", "249536_37.75_-122.47_2019.csv")
-# folder_path_2 <- file.path(here(), "data", "wind_long_clean_cluster", "cluster_0", "249536_37.75_-122.47_2020.csv")
-# 
-# df <- read_csv(folder_path)
-# df_2 <- read_csv(folder_path_2)
-# 
-# df <- rbind(df, df_2)
-# 
-# siteid <- names(df)[2]
-# lat_col <- names(df)[10]
-# lon_col <- names(df)[8]
-# 
-# df$SITEID <- siteid
-# # Replace NA values in Latitude and Longitude columns with the corresponding column name values
-# df$Latitude <- ifelse(is.na(df$Latitude), lat_col, df$Latitude)
-# df$Longitude <- ifelse(is.na(df$Longitude), lon_col, df$Longitude)
-# df <- df[ , -c(8, 10)]  # Drop the 2nd and 4th columns
-# df <- df[-1, ]
-# df <- setNames(df, c('Year', 'Month', 'Day', 'Hour', 'Minute', 'WindSpeed', 'Latitude', 'Longitude', 'SiteID'))
-# 
-# df$WindSpeed <- as.numeric(df$WindSpeed)
-# 
-# no_of_hours_df <- df %>%
-#   filter(WindSpeed < 4 | WindSpeed > 25)
-# 
-# no_of_hours <- nrow(no_of_hours_df)
-# no_of_hours
+siteid <- names(df)[2]
+lat_col <- names(df)[10]
+lon_col <- names(df)[8]
+
+df$SITEID <- siteid
+# Replace NA values in Latitude and Longitude columns with the corresponding column name values
+df$Latitude <- ifelse(is.na(df$Latitude), lat_col, df$Latitude)
+df$Longitude <- ifelse(is.na(df$Longitude), lon_col, df$Longitude)
+df <- df[ , -c(8, 10)]  # Drop the 2nd and 4th columns
+df <- df[-1, ]
+df <- setNames(df, c('Year', 'Month', 'Day', 'Hour', 'Minute', 'WindSpeed', 'Latitude', 'Longitude', 'SiteID'))
+
+df$WindSpeed <- as.numeric(df$WindSpeed)
+
+no_of_hours_df <- df %>%
+  filter(WindSpeed < 4 | WindSpeed > 25)
+
+no_of_hours <- nrow(no_of_hours_df)
+no_of_hours
 
 
 
