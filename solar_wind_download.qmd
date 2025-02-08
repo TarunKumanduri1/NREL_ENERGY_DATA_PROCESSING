@@ -1,0 +1,597 @@
+---
+title: "Solar_wind_download"
+format: html
+editor: visual
+---
+
+```{r}
+#| label: setup
+#| include: false
+knitr::opts_chunk$set(
+    warning = FALSE,
+    message = FALSE,
+    fig.path = "plots/",
+    fig.width = 7.252,
+    fig.height = 4,
+    comment = "#>",
+    fig.retina = 3
+)
+
+#install.packages("jsonlite")
+#install.packages("httr")
+
+# Load libraries
+library(knitr)
+library(tidyverse)
+library(cowplot)
+library(readxl)
+library(lubridate)
+library(janitor)
+library(here)
+library(jsonlite)
+library(httr)
+
+```
+
+```{r}
+#Load raw data sets:
+xlsxPath <- here('data', 'egrid.xlsx')
+egrid <- read_excel(xlsxPath, sheet = 'PLNT22', skip = 1)
+```
+
+```{r}
+# to get a data frame of only the plants with wind and solar fueled generators
+
+#Load raw data sets:
+xlsxPath <- here('data', 'egrid.xlsx')
+plants <- read_excel(xlsxPath, sheet = 'PLNT22', skip = 1)
+
+xlsxPath2 <- here('data', 'egrid.xlsx')
+generators <- read_excel(xlsxPath2, sheet = 'GEN22', skip = 1)
+
+#Clean data frames
+gen_clean <- generators %>% 
+  select(ORISPL, FUELG1) %>% 
+  filter(FUELG1 %in% c('WND','SUN')) %>% 
+  distinct(ORISPL,.keep_all = TRUE) #for some reason, excel is removing more data but I think R is right
+
+plants_fix <- plants
+plants_fix$PSTATABB[plants_fix$ORISPL == 59036] <- "NC"
+print(plants_fix$PSTATABB[3071]) #should be NC
+print(plants_fix$ORISPL[3071]) #should be 59036
+
+plants_clean <- plants_fix %>% 
+  filter(!PSTATABB %in% c("AK", "PR", "HI")) %>%  #remove non-CONUS (alaska, puerto rico, hawaii)
+  filter(!BACODE == "NA") %>% #remove plants with no BA
+  select(PNAME, ORISPL, CNTYNAME, LAT, LON)
+
+gen_loc <- gen_clean %>% 
+  inner_join(plants_clean, by = 'ORISPL')
+write_csv(gen_loc, "C:\\Users\\Tarun Kumanduri\\Box\\R\\Paper1\\data\\gen_loc.csv")
+```
+
+```{r}
+#change state abbreviation of plant 59036 according to EPA known issue
+egrid_fix <- egrid
+egrid_fix$PSTATABB[egrid_fix$ORISPL == 59036] <- "NC"
+
+#to check the correct cell was changed
+print(egrid_fix$PSTATABB[3071]) #should be NC
+print(egrid_fix$ORISPL[3071]) #should be 59036
+
+df <- egrid %>% 
+  select(ORISPL, PNAME, OPRNAME, CNTYNAME, LAT, LON)
+
+write_csv(df, "C:\\Users\\Tarun Kumanduri\\Box\\R\\Paper1\\data\\Coordinates.csv")
+```
+
+```{r}
+path <- here('data', 'LA_plants.csv')
+df_LA <- read_csv(path)
+
+```
+
+```{r}
+df_LA_Location <- df_LA %>% 
+  select(LAT, LON) %>% 
+  unite(location, sep = " ")
+
+string_1 <- paste(df_LA_Location$location, collapse = ",")
+name <- paste0("multipoint(", string_1, ")")
+
+api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+wkt1 <- paste0("MULTIPOINT(", string_1, ")")
+names <- "2019,2020"
+attributes <- "windspeed_100m"
+utc <- "true"
+leap_day <- "true"
+interval <- "60"
+email <- "abbey.kollar@gwu.edu"
+
+# Construct the URL
+url1 <- paste0(
+  "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-led-conus-download.json?",
+  "api_key=", URLencode(api_key),
+  "&attributes=", URLencode(attributes),
+  "&wkt=", URLencode(wkt1),
+  "&names=", URLencode(names),
+  "&utc=", URLencode(utc),
+  "&leap_day=", URLencode(leap_day),
+  "&interval=", URLencode(interval),
+  "&email=", URLencode(email)
+)
+
+wind_1 <- GET(url1)
+
+```
+
+```{r}
+#LA test
+
+la <- read_csv(here::here('data', 'LA_plants.csv'))
+
+la_2 <- la %>% 
+   clean_names(case = 'lower_camel') %>%
+   select(lon, lat) %>% 
+   unite(location, sep = " ") #now appears to have dropped 0s (although appears to not matter in maps)
+ 
+ string_la <- paste(la_2$location, collapse = ",")  
+ 
+ # Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
+ api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+ wktla <- paste0("MULTIPOINT(", string_la, ")")
+ names <- "2019,2020"
+ attributes <- "windspeed_100m"
+ utc <- "true"
+ leap_day <- "true"
+ interval <- "60"
+ email <- "abbey.kollar@gwu.edu"
+ 
+ # Construct the URL
+ urlla <- paste0(
+   "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-led-conus-download.json?",
+   "api_key=", URLencode(api_key),
+   "&attributes=", URLencode(attributes),
+   "&wkt=", URLencode(wktla),
+   "&names=", URLencode(names),
+   "&utc=", URLencode(utc),
+   "&leap_day=", URLencode(leap_day),
+   "&interval=", URLencode(interval),
+   "&email=", URLencode(email))
+ 
+ 
+ wind_la <- GET(urlla)
+ 
+ status_code(wind_la)
+```
+
+```{r}
+#Cluster test cluster 0
+cl_0 <- read_csv(here::here('data\\clustered_files', 'cluster_162.csv'))
+
+cl_0_2 <- cl_0 %>% 
+   clean_names(case = 'lower_camel') %>%
+   select(lon, lat) %>% 
+   unite(location, sep = " ") #now appears to have dropped 0s (although appears to not matter in maps)
+ 
+ string_cl_0 <- paste(cl_0_2$location, collapse = ",")  
+ 
+ # Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
+ api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4" 
+ wktcl <- paste0("POINT(", string_cl_0, ")")
+ names <- "2019,2020"
+ attributes <- "windspeed_100m"
+ utc <- "true"
+ leap_day <- "true"
+ interval <- "60"
+ email <- "alabdata2024@gmail.com"
+ 
+ # Construct the URL
+ urlcl_0 <- paste0(
+   "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-led-conus-download.json?",
+   "api_key=", URLencode(api_key),
+   "&attributes=", URLencode(attributes),
+   "&wkt=", URLencode(wktcl),
+   "&names=", URLencode(names),
+   "&utc=", URLencode(utc),
+   "&leap_day=", URLencode(leap_day),
+   "&interval=", URLencode(interval),
+   "&email=", URLencode(email))
+ 
+ 
+ wind_cl_0 <- GET(urlcl_0)
+ 
+ status_code(wind_cl_0)
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(httr)
+library(here)
+
+process_wind_clusters <- function(cluster_numbers) {
+  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  attributes <- "windspeed_100m"
+  names <- "2019,2020"
+  utc <- "true"
+  leap_day <- "true"
+  interval <- "60"
+  email <- "alabdata2024@gmail.com"
+
+  results <- map(cluster_numbers, function(n) {
+    # Read and process the cluster file
+    cl <- read_csv(here::here('data', 'clustered_files', paste0('cluster_', n, '.csv')))
+    cl_processed <- cl %>% 
+      clean_names(case = 'lower_camel') %>%
+      select(lon, lat) %>% 
+      unite(location, sep = " ")
+    
+    string_cl <- paste(cl_processed$location, collapse = ",")
+    
+    # Construct the WKT string and URL
+    wkt <- paste0("MULTIPOINT(", string_cl, ")")
+    url <- paste0(
+      "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-led-conus-download.json?",
+      "api_key=", URLencode(api_key),
+      "&attributes=", URLencode(attributes),
+      "&wkt=", URLencode(wkt),
+      "&names=", URLencode(names),
+      "&utc=", URLencode(utc),
+      "&leap_day=", URLencode(leap_day),
+      "&interval=", URLencode(interval),
+      "&email=", URLencode(email))
+    
+    # Make the API request
+    response <- GET(url)
+    
+    # Return the response
+    response
+  })
+  
+  # Print status codes
+  status_codes <- map_int(results, status_code)
+  print(paste("Status codes for clusters", paste(cluster_numbers, collapse = ", "), ":", 
+              paste(status_codes, collapse = ", ")))
+  
+  # Return the results
+  results
+}
+
+# Use the function
+cluster_numbers <- 142:159
+wind_data_results <- process_wind_clusters(cluster_numbers)
+
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(httr)
+library(here)
+
+process_solar_clusters <- function(cluster_numbers) {
+  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  attributes_rad <- "ghi"
+  names <- "2019,2020"
+  utc <- "true"
+  leap_day <- "true"
+  interval <- "60"
+  email <- "alabdata2024@gmail.com"
+
+  results <- map(cluster_numbers, function(n) {
+    # Read and process the cluster file
+    cl <- read_csv(here::here('data', 'clustered_files', paste0('cluster_', n, '.csv')))
+    cl_processed <- cl %>% 
+      clean_names(case = 'lower_camel') %>%
+      select(lon, lat) %>% 
+      unite(location, sep = " ")
+    
+    string_cl <- paste(cl_processed$location, collapse = ",")
+    
+    # Construct the WKT string and URL
+    wkt <- paste0("MULTIPOINT(", string_cl, ")")
+    url <- paste0(
+      "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.json?",
+      "api_key=", URLencode(api_key),
+      "&attributes=", URLencode(attributes_rad),
+      "&wkt=", URLencode(wkt),
+      "&names=", URLencode(names),
+      "&utc=", URLencode(utc),
+      "&leap_day=", URLencode(leap_day),
+      "&interval=", URLencode(interval),
+      "&email=", URLencode(email))
+    
+    # Make the API request
+    response <- GET(url)
+    
+    # Return the response
+    response
+  })
+  
+  # Print status codes
+  status_codes <- map_int(results, status_code)
+  print(paste("Status codes for clusters", paste(cluster_numbers, collapse = ", "), ":", 
+              paste(status_codes, collapse = ", ")))
+  
+  # Return the results
+  results
+}
+
+# Use the function
+cluster_numbers <- 158
+solar_data_results <- process_solar_clusters(cluster_numbers)
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(httr)
+library(here)
+
+process_solar_clusters <- function(cluster_numbers) {
+  api_key <- "RrEYG7drsuXNhVKHRIjkDzHKUMAIIdghxB0gyje4"
+  attributes_rad <- "ghi"
+  names <- "2019,2020"
+  utc <- "true"
+  leap_day <- "true"
+  interval <- "60"
+  email <- "alabdata2024@gmail.com"
+
+  results <- map(cluster_numbers, function(n) {
+    # Read and process the cluster file
+    cl <- read_csv(here::here('data', 'clustered_files', paste0('cluster_', n, '.csv')))
+    cl_processed <- cl %>% 
+      clean_names(case = 'lower_camel') %>%
+      select(lon, lat) %>% 
+      unite(location, sep = " ")
+    
+    string_cl <- paste(cl_processed$location, collapse = ",")
+    
+    # Construct the WKT string and URL
+    wkt <- paste0("POINT(", string_cl, ")")
+    url <- paste0(
+      "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.json?",
+      "api_key=", URLencode(api_key),
+      "&attributes=", URLencode(attributes_rad),
+      "&wkt=", URLencode(wkt),
+      "&names=", URLencode(names),
+      "&utc=", URLencode(utc),
+      "&leap_day=", URLencode(leap_day),
+      "&interval=", URLencode(interval),
+      "&email=", URLencode(email))
+    
+    # Make the API request
+    response <- GET(url)
+    
+    # Return the response
+    response
+  })
+  
+  # Print status codes
+  status_codes <- map_int(results, status_code)
+  print(paste("Status codes for clusters", paste(cluster_numbers, collapse = ", "), ":", 
+              paste(status_codes, collapse = ", ")))
+  
+  # Return the results
+  results
+}
+
+# Use the function
+cluster_numbers <- 162
+solar_data_results <- process_solar_clusters(cluster_numbers)
+```
+
+```{r}
+#create df 'location' that includes the lon lat of each plant
+location <- egrid_fix %>% 
+  clean_names(case = 'lower_camel') %>%
+  filter(!pstatabb %in% c("AK", "PR", "HI")) %>%  #remove non-CONUS (alaska, puerto rico, hawaii)
+  filter(!bacode == "NA") %>% #remove plants with no BA
+  select(lon, lat) %>% 
+  unite(location, sep = " ") #now appears to have dropped 0s (although appears to not matter in maps)
+
+#Asked chatgpt how to write this split code, which is needed due to restraints on the api request
+#Specify rows per slice
+rows_per_slice <- 250 
+
+# Function to split data frame into chunks
+split_dataframe <- function(df, rows_per_slice) {
+  num_rows <- nrow(df)
+  num_slices <- ceiling(num_rows / rows_per_slice)
+  
+  # Create a list to store the smaller data frames
+  sliced_dfs <- vector("list", num_slices)
+  
+  for (i in seq_len(num_slices)) {
+    start_row <- (i - 1) * rows_per_slice + 1
+    end_row <- min(i * rows_per_slice, num_rows)
+    sliced_dfs[[i]] <- df[start_row:end_row, ]
+  }
+  
+  return(sliced_dfs)
+}
+
+# Split the large data frame
+sliced_dfs <- split_dataframe(location, rows_per_slice)
+
+#Convert the small df to a string
+string_1 <- paste(sliced_dfs[[1]]$location, collapse = ",")  
+
+```
+
+```{r}
+#to see what the string is
+name <- paste0("multipoint(", string_1, ")")
+print(name)
+```
+
+```{r}
+#Use the NREL api to obtain the wind speed at 100m for all plant locations
+
+# Define the parameters for the GET request; wktx where x=1-47 for the 47 smaller df
+api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+wkt1 <- paste0("MULTIPOINT(", string_1, ")")
+names <- "2019,2020"
+attributes <- "windspeed_100m"
+utc <- "true"
+leap_day <- "true"
+interval <- "60"
+email <- "abbey.kollar@gwu.edu"
+
+# Construct the URL
+url1 <- paste0(
+  "https://developer.nrel.gov/api/wind-toolkit/v2/wind/wtk-led-conus-download.json?",
+  "api_key=", URLencode(api_key),
+  "&attributes=", URLencode(attributes),
+  "&wkt=", URLencode(wkt1),
+  "&names=", URLencode(names),
+  "&utc=", URLencode(utc),
+  "&leap_day=", URLencode(leap_day),
+  "&interval=", URLencode(interval),
+  "&email=", URLencode(email)
+)
+
+wind_1 <- GET(url1)
+
+
+wind_1_long$Latitude[is.na(wind_1_long$latitude)] <- 32.686043
+
+wind_1_long$Longitude[is.na(wind_1_long$longitude)] <- -114.49255
+
+wind_1_long <- wind_1_long[ , -c(8, 10)]  # Drop the 2nd and 4th columns
+wind_1_long <- wind_1_long[-1, ]
+wind_1_long <- wind_1_long %>% 
+  mutate(Site_ID = '758667')
+
+wind_1_long <- setNames(wind_1_long, c('Year', 'Month', 'Day', 'Hour', 'Minute', 'Wind Speed', 'Longitude', 'Latitude', 'Site ID'))
+status_code(wind_1)
+```
+
+```{r}
+#upload all wind files within one folder
+folder_path <- "C:\\Users\\abbey\\Box\\AK Research\\Data\\R\\Paper1\\data\\wind_1_long_test"
+csv_files <- list.files(path = folder_path, pattern = '*.csv', full.names = TRUE)
+# Function to process each CSV file
+process_csv <- function(file_path) {
+  # Read the CSV file
+  df <- read_csv(file_path, col_types = cols(.default = "c"))
+  # Find the column indices for Latitude and Longitude
+  lat_col <- names(df)[10]
+  lon_col <- names(df)[8]
+  # Replace NA values in Latitude and Longitude columns with the corresponding column name values
+  df$Latitude <- ifelse(is.na(df$Latitude), lat_col, df$Latitude)
+  df$Longitude <- ifelse(is.na(df$Longitude), lon_col, df$Longitude)
+  df <- df[ , -c(8, 10)]  # Drop the 2nd and 4th columns
+df <- df[-1, ]
+
+df <- setNames(df, c('Year', 'Month', 'Day', 'Hour', 'Minute', 'Wind Speed', 'Latitude', 'Longitude'))
+  # Write the processed data back to the original file
+  write_csv(df, file_path)
+  # Return TRUE to indicate successful processing
+  return(TRUE)
+}
+# Process all CSV files
+results <- sapply(csv_files, function(file) {
+  tryCatch({
+    process_csv(file)
+    cat("Processed:", file, "\n")
+    TRUE
+  }, error = function(e) {
+    cat("Error processing:", file, "\n")
+    cat("Error message:", conditionMessage(e), "\n")
+    FALSE
+  })
+})
+# Print summary
+cat("\nProcessing complete.\n")
+cat("Files processed successfully:", sum(results), "\n")
+cat("Files failed:", sum(!results), "\n")
+```
+
+```{r}
+
+df <- read_csv("C:\\Users\\abbey\\Box\\AK Research\\Data\\R\\Paper1\\data\\wind_1_long\\809419_34.17_-114.28_2020.csv")
+
+```
+
+```{r}
+#open wind_1 download in R
+read_csv(here('data','wind_1','758667_32.69_-114.49_2019.csv'))
+```
+
+```{r}
+#using rounded decimals for the first set yielded 474 files, and not rounding gave 472 files. The second small data frame (no rounding) had 444 files. 
+```
+
+```{r}
+#use the NREL api to obtain the solar air temperature data for all plant locations -- ignore for now
+
+# Define the new parameters for the GET request - all the same as wind, but the attributes
+#api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+#wkt1 <- paste0("MULTIPOINT(", string_1, ")")
+#names <- "2019,2020"
+attributes_temp <- "air_temperature"
+#utc <- "true"
+#leap_day <- "true"
+#interval <- "60"
+#email <- "abbey.kollar@gwu.edu"
+
+# Construct the URL
+url1_temp <- paste0(
+  "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.json?",
+  "api_key=", URLencode(api_key),
+  "&attributes=", URLencode(attributes_temp),
+  "&wkt=", URLencode(wkt1),
+  "&names=", URLencode(names),
+  "&utc=", URLencode(utc),
+  "&leap_day=", URLencode(leap_day),
+  "&interval=", URLencode(interval),
+  "&email=", URLencode(email)
+)
+
+airtemp_1 <- GET(url1_temp)
+
+status_code(airtemp_1)
+```
+
+```{r}
+#open airtemp_1 download in R (long decimals)
+airtemp_1 <- read_csv(here('data','airtemp_1','268557_36.01_-114.74_2019.csv'))
+```
+
+```{r}
+#use the NREL api to obtain the solar ghi data for all plant locations
+
+# Define the new parameters for the GET request - all the same as wind, but the attributes
+#api_key <- "TLj8QkRr0cTulqbRQbWEQJ4CqXwgObExX5gVIcNe" 
+#wkt1 <- paste0("MULTIPOINT(", string_1, ")")
+#names <- "2019,2020"
+attributes_rad <- "ghi"
+#utc <- "true"
+#leap_day <- "true"
+#interval <- "60"
+#email <- "abbey.kollar@gwu.edu"
+
+# Construct the URL
+url1_rad <- paste0(
+  "https://developer.nrel.gov/api/nsrdb/v2/solar/psm3-2-2-download.json?",
+  "api_key=", URLencode(api_key),
+  "&attributes=", URLencode(attributes_rad),
+  "&wkt=", URLencode(wkt1),
+  "&names=", URLencode(names),
+  "&utc=", URLencode(utc),
+  "&leap_day=", URLencode(leap_day),
+  "&interval=", URLencode(interval),
+  "&email=", URLencode(email)
+)
+
+rad_1 <- GET(url1_rad)
+
+status_code(rad_1)
+```
+
+```{r}
+#open rad_1 download in R (long decimals)
+rad_1 <- read_csv(here('data','rad_1','268557_36.01_-114.74_2019.csv'))
+```

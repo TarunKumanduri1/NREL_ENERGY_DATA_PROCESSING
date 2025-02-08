@@ -1,0 +1,435 @@
+---
+title: "cluster_analysis_solar_rad"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(here)
+library(purrr)
+library(here)
+```
+
+# Cleaning and Analysis Group of Unknown clusters data code
+
+```{r}
+process_cluster <- function(cluster_folder, cluster_number) {
+  # Define the folder path
+  cluster_path <- file.path("C:/Users/Tarun Kumanduri/Box/R/Paper1/data/solar_long_clean_clusters/requests_9", cluster_folder)
+  all_files <- list.files(cluster_path, pattern = "*.csv", full.names = TRUE)
+  
+  if (length(all_files) == 0) {
+    warning(paste("No CSV files found in cluster", cluster_number))
+    return(NULL)
+  }
+  
+  print(paste("Number of files found in cluster", cluster_number, ":", length(all_files)))
+
+  # Extract location information from file names to identify unique locations (ignoring the year)
+  locations <- data.frame(
+    file_path = all_files,
+    file_name = basename(all_files),
+    stringsAsFactors = FALSE
+  ) %>%
+    separate(file_name, c("location_id", "lat", "lon", "year"), sep = "_", remove = FALSE) %>%
+    mutate(year = sub(".csv", "", year)) %>%
+    distinct(location_id, lat, lon)
+  
+  # Process data for each unique location
+  process_location_data <- function(location_id, lat, lon) {
+    # Get file paths for both 2019 and 2020
+    files_for_location <- all_files[grepl(paste0(location_id, "_", lat, "_", lon), all_files)]
+    
+    # Combine (bind) data from both years
+    df_combined <- bind_rows(lapply(files_for_location, function(file) {
+      df <- tryCatch({
+        read_csv(file, col_types = cols(.default = "c"))
+      }, error = function(e) {
+        warning("Error reading file:", e$message)
+        return(NULL)
+      })
+      
+      if (is.null(df) || nrow(df) == 0) {
+        warning("No data found in file:", file)
+        return(NULL)
+      }
+      
+      # Rename columns if they match expected structure
+      if (ncol(df) >= 6) {
+        colnames(df)[1:6] <- c("Year", "Month", "Day", "Hour", "Minute", "GHI")
+      } else {
+        warning("Insufficient columns in file:", file)
+        return(NULL)
+      }
+      
+      return(df)
+    }))
+    
+    if (is.null(df_combined) || nrow(df_combined) == 0) {
+      warning("No combined data found for location:", location_id)
+      return(data.frame(Latitude = NA, Longitude = NA, High_GHI_Hours = NA, Low_GHI_Hours = NA))
+    }
+    
+    # Use metadata from the first file for latitude and longitude
+    lat_col <- lat
+    lon_col <- lon
+    
+    # Drop the first two rows if they are headers or unwanted rows
+    df_combined <- df_combined[-(1:2), ]
+    
+    # Convert GHI to numeric and filter
+    df_combined$GHI <- as.numeric(df_combined$GHI)
+    filtered_df_high <- df_combined %>% filter(GHI < 200 | GHI > 1000)
+    filtered_df_low <- df_combined %>% filter(GHI < 200)
+    
+    high_ghi_count <- nrow(filtered_df_high)
+    low_ghi_count <- nrow(filtered_df_low)
+    
+    # Return as a single-row data frame
+    return(data.frame(Latitude = lat_col, Longitude = lon_col, High_GHI_Hours = high_ghi_count, Low_GHI_Hours = low_ghi_count))
+  }
+  
+  # Process each location and combine results
+  results <- bind_rows(lapply(1:nrow(locations), function(i) {
+    location <- locations[i, ]
+    process_location_data(location$location_id, location$lat, location$lon)
+  }))
+
+  # Define output file path
+  output_file <- file.path("C:/Users/Tarun Kumanduri/Box/R/Paper1/data/solar_no_of_hours_clusters/requests_9", paste0("processed_cluster_", cluster_number, ".csv"))
+  dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
+  
+  # Save results to CSV
+  write_csv(results, output_file)
+  print(paste("Processing complete for cluster", cluster_number, ". Results saved to", output_file))
+}
+
+# Example usage
+cluster_folders <- list.dirs(path = "C:/Users/Tarun Kumanduri/Box/R/Paper1/data/solar_long_clean_clusters/requests_9", full.names = FALSE, recursive = FALSE)
+map2(cluster_folders, seq_along(cluster_folders), ~process_cluster(.x, .y))
+print("All clusters processed and saved.")
+```
+
+# Matching the group of unknown cluster data
+
+```{r}
+# Load the main plants clusters file
+df1 <- read_csv(here("data", "clustered_files", "plants_clusters.csv"))
+
+# Function to find the closest point within a threshold
+find_closest <- function(lat, lon, df, threshold) {
+  df$diff <- abs(df$LAT - lat) + abs(df$LON - lon)
+  closest <- df[which.min(df$diff), ]
+  if (closest$diff <= threshold) {
+    return(closest[, c("LAT", "LON", "High_GHI_Hours", "Low_GHI_Hours")])
+  } else {
+    return(data.frame(LAT = NA, LON = NA, High_GHI_Hours = NA, Low_GHI_Hours = NA))
+  }
+}
+
+# Function to process a single CSV file with error handling
+process_file <- function(file_path) {
+  tryCatch({
+    print(paste("Processing file:", file_path))
+    
+    # Read the CSV file
+    df2 <- read_csv(file_path)
+    
+    # Rename columns in df2 to ensure consistency
+    colnames(df2)[colnames(df2) == "Latitude"] <- "LAT"
+    colnames(df2)[colnames(df2) == "Longitude"] <- "LON"
+    
+    # Perform initial join with a small threshold
+    small_threshold <- 0.1
+    joined <- df1 %>%
+      rowwise() %>%
+      mutate(closest = list(find_closest(LAT, LON, df2, small_threshold))) %>%
+      unnest(cols = c(closest), names_sep = "_df2_")
+    
+    # Rename columns for clarity
+    joined <- joined %>%
+      rename(
+        LAT_point = LAT,
+        LON_point = LON,
+        LAT_NREL = closest_df2_LAT,
+        LON_NREL = closest_df2_LON,
+        High_GHI_Hours = closest_df2_High_GHI_Hours,
+        Low_GHI_Hours = closest_df2_Low_GHI_Hours
+      )
+    
+    # Determine which cluster has more non-NA values for both LAT_NREL and LON_NREL
+    cluster_counts <- joined %>%
+      group_by(cluster) %>%
+      summarise(non_na_count = sum(!is.na(LAT_NREL) & !is.na(LON_NREL)))
+    
+    best_cluster <- cluster_counts %>%
+      filter(non_na_count == max(non_na_count)) %>%
+      pull(cluster)
+    
+    # Filter the joined dataframe for the best cluster
+    filtered_joined <- joined %>%
+      filter(cluster == best_cluster)
+    
+    # Create directory for output
+    output_dir <- file.path(here(), "data", "Joined_data_plants_nrel_solar")
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE)
+    }
+    
+    # Save the filtered result with appropriate filename
+    output_filename <- paste0("cluster_", best_cluster, ".csv")
+    write_csv(filtered_joined, file.path(output_dir, output_filename))
+    
+    # Print summary of join operation
+    cat("Processing file:", basename(file_path), "\n")
+    cat("Number of rows in df1:", nrow(df1), "\n")
+    cat("Number of rows in df2:", nrow(df2), "\n")
+    cat("Number of rows in joined dataframe:", nrow(joined), "\n")
+    cat("Number of rows in filtered joined dataframe:", nrow(filtered_joined), "\n")
+    cat("Best cluster:", best_cluster, "\n")
+    cat("Number of non-NA matches (both LAT_NREL and LON_NREL) in best cluster:",
+        cluster_counts$non_na_count[cluster_counts$cluster == best_cluster], "\n")
+    cat("\n")
+    
+  }, error = function(e) {
+    cat("Error processing file:", basename(file_path), "\n")
+    cat("Error message:", conditionMessage(e), "\n\n")
+  })
+}
+
+# Get all CSV files in the Request_8 directory
+csv_files <- list.files(path = here("data", "solar_no_of_hours_clusters", "requests_9"),
+                        pattern = "\\.csv$",
+                        full.names = TRUE)
+
+# Use walk to process each CSV file
+purrr::walk(csv_files, process_file)
+```
+
+# Cleaning and Analysis of known 1 cluster code
+
+```{r}
+# Define function to process a single cluster with combined data for multiple years
+process_single_cluster <- function(cluster_name) {
+  # Define file path pattern for the specified cluster
+  file_pattern <- file.path(here(), "data", "solar_long_clean_clusters", "individual_requests", cluster_name, "*.csv")
+  all_files <- Sys.glob(file_pattern)
+  
+  if (length(all_files) == 0) {
+    warning(paste("No CSV files found in cluster", cluster_name))
+    return(NULL)
+  }
+  
+  print(paste("Number of files found in cluster", cluster_name, ":", length(all_files)))
+
+  # Extract location information from file names to identify unique locations (ignoring the year)
+  locations <- data.frame(
+    file_name = basename(all_files),
+    stringsAsFactors = FALSE
+  ) %>%
+    separate(file_name, c("location_id", "lat", "lon", "year"), sep = "_", remove = FALSE) %>%
+    mutate(year = sub(".csv", "", year)) %>%
+    distinct(location_id, lat, lon)
+  
+  # Function to process data for each unique location
+  process_location_data <- function(location_id, lat, lon) {
+    # List of files for the given location and both years
+    files_for_location <- all_files[grepl(paste0(location_id, "_", lat, "_", lon), all_files)]
+    
+    # Combine data from both years
+    df_combined <- bind_rows(lapply(files_for_location, function(file) {
+      df <- read_csv(file)
+      
+      # Ensure columns are renamed consistently
+      if (ncol(df) >= 6) {
+        colnames(df)[1:6] <- c("Year", "Month", "Day", "Hour", "Minute", "GHI")
+      }
+      
+      return(df)
+    }))
+    
+    # Metadata for latitude and longitude
+    lat_col <- lat
+    lon_col <- lon
+    
+    # Drop any unwanted rows
+    df_combined <- df_combined[-1, ]
+    
+    # Convert GHI to numeric and filter for high and low GHI values
+    df_combined$GHI <- as.numeric(df_combined$GHI)
+    filtered_df_high <- df_combined %>% filter(GHI < 200 | GHI > 1000)
+    filtered_df_low <- df_combined %>% filter(GHI < 200)
+    
+    high_ghi_count <- nrow(filtered_df_high)
+    low_ghi_count <- nrow(filtered_df_low)
+    
+    # Return as a single-row data frame
+    return(data.frame(Latitude = lat_col, Longitude = lon_col, High_GHI_Hours = high_ghi_count, Low_GHI_Hours = low_ghi_count))
+  }
+  
+  # Process each location and combine results
+  results <- bind_rows(lapply(1:nrow(locations), function(i) {
+    location <- locations[i, ]
+    process_location_data(location$location_id, location$lat, location$lon)
+  }))
+  
+  # Define output file path
+  output_file <- file.path(here(), "data", "solar_no_of_hours_clusters", "individual_requests", paste0(cluster_name, ".csv"))
+  dir.create(dirname(output_file), recursive = TRUE, showWarnings = FALSE)
+  
+  # Save results to CSV
+  write_csv(results, output_file)
+  print(paste("Processing complete for cluster", cluster_name, ". Results saved to", output_file))
+}
+
+# Example usage: Process a specific cluster by name
+process_single_cluster("cluster_158")
+print("Processing complete for all specified clusters.")
+```
+
+# Matching 1 Known cluster code
+
+```{r}
+library(tidyverse)
+library(here)
+
+# Define a function to process the join for a specified cluster number
+process_cluster <- function(cluster_number) {
+  # Read the datasets
+  df1 <- read_csv(here("data", "clustered_files", "plants_clusters.csv"))
+  df2 <- read_csv(here("data", "solar_no_of_hours_clusters", "individual_requests", paste0("cluster_", cluster_number, ".csv")))
+  
+  # Rename columns in df2
+  colnames(df2)[colnames(df2) == "Latitude"] <- "LAT"
+  colnames(df2)[colnames(df2) == "Longitude"] <- "LON"
+  
+  # Function to find the closest point within a threshold
+  find_closest <- function(lat, lon, df, threshold) {
+    df$diff <- abs(df$LAT - lat) + abs(df$LON - lon)
+    closest <- df[which.min(df$diff), ]
+    if (closest$diff <= threshold) {
+      return(closest[, c("LAT", "LON", "High_GHI_Hours", "Low_GHI_Hours")])
+    } else {
+      return(data.frame(LAT = NA, LON = NA, High_GHI_Hours = NA, Low_GHI_Hours = NA))
+    }
+  }
+  
+  # Perform initial join with a small threshold
+  small_threshold <- 0.1  # Adjust as needed
+  joined <- df1 %>%
+    rowwise() %>%
+    mutate(closest = list(find_closest(LAT, LON, df2, small_threshold))) %>%
+    unnest(cols = c(closest), names_sep = "_df2_")
+  
+  # Rename columns for clarity
+  joined <- joined %>%
+    rename(
+      LAT_point = LAT,
+      LON_point = LON,
+      LAT_NREL = closest_df2_LAT,
+      LON_NREL = closest_df2_LON,
+      High_GHI_Hours = closest_df2_High_GHI_Hours,
+      Low_GHI_Hours = closest_df2_Low_GHI_Hours
+    )
+  
+  # Filter the joined dataframe for the specified cluster
+  filtered_joined <- joined %>%
+    filter(cluster == cluster_number)
+  
+  # Create directory for output
+  output_dir <- file.path(here(), "data", "Joined_data_plants_nrel_solar")
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = TRUE)
+  }
+  
+  # Save the filtered result with an appropriate filename
+  write_csv(filtered_joined, file.path(output_dir, paste0("cluster_", cluster_number, ".csv")))
+  
+  # Print the first few rows of the result
+  print(head(filtered_joined))
+  
+  # Print summary of join operation
+  cat("Number of rows in df1:", nrow(df1), "\n")
+  cat("Number of rows in df2:", nrow(df2), "\n")
+  cat("Number of rows in joined dataframe:", nrow(joined), "\n")
+  cat("Number of rows in filtered joined dataframe:", nrow(filtered_joined), "\n")
+  cat("Filtered for cluster:", cluster_number, "\n")
+  cat("Number of non-NA matches (both LAT_NREL and LON_NREL) in cluster:",
+      sum(!is.na(filtered_joined$LAT_NREL) & !is.na(filtered_joined$LON_NREL)), "\n")
+}
+
+# Example usage: Process a specific cluster by number
+process_cluster(158)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+
+# Define function to process and modify each cluster file
+process_cluster_file <- function(cluster_number) {
+  # Construct the file path for the current cluster
+  file_path <- here("data", "Joined_data_plants_nrel_solar", paste0("cluster_", cluster_number, ".csv"))
+  
+  # Check if the file exists
+  if (!file.exists(file_path)) {
+    warning(paste("File does not exist:", file_path))
+    return(NULL)
+  }
+  
+  # Read the CSV file
+  df <- read_csv(file_path)
+  
+  # Drop the columns High_GHI_Hours and Low_GHI_Hours
+  df <- df %>% select(-High_GHI_Hours, -Low_GHI_Hours)
+  
+  # Rename the columns closest_df2_High GHI Hours and closest_df2_Low GHI Hours
+  df <- df %>%
+    rename(
+      High_GHI_Hours = `closest_df2_High GHI Hours`,
+      Low_GHI_Hours = `closest_df2_Low GHI Hours`
+    )
+  
+  # Define the output path
+  output_file_path <- here("data", "Joined_data_plants_nrel_solar", paste0("modified_cluster_", cluster_number, ".csv"))
+  
+  # Ensure output directory exists
+  dir.create(dirname(output_file_path), recursive = TRUE, showWarnings = FALSE)
+  
+  # Save the modified dataframe to a new CSV file
+  write_csv(df, output_file_path)
+  
+  # Print a message indicating completion for the current file
+  print(paste("Processed and saved:", output_file_path))
+}
+
+# Process files from cluster_0 to cluster_10
+for (cluster_number in 0:10) {
+  process_cluster_file(cluster_number)
+}
+```
+
+```{r}
+# Define the path to the folder containing the modified cluster files
+input_folder <- here("data", "Joined_data_plants_nrel_solar")
+
+# Get a list of all CSV files in the folder that match the pattern "cluster_*.csv"
+file_list <- list.files(input_folder, pattern = "^cluster_\\d+\\.csv$", full.names = TRUE)
+
+# Read and bind all files into a single DataFrame
+combined_df <- file_list %>%
+  map_dfr(read_csv)  # `map_dfr` reads and binds all files row-wise
+
+# Define the output path for the combined file
+output_file_path <- here("data", "Joined_data_plants_nrel_solar", "combined_clusters_solar.csv")
+
+# Save the combined DataFrame to a CSV file
+write_csv(combined_df, output_file_path)
+
+# Print a message to confirm completion
+print(paste("All files combined and saved to:", output_file_path))
+
+```
